@@ -11,7 +11,7 @@ It supports:
 - validating header values
 - converting between bytes, words, and payload-bit representations
 
-The implementation lives in `transport_packet_updated.py` and was derived from the code you attached earlier. fileciteturn0file0
+The implementation lives in `transport_packet_updated.py` .
 
 ---
 
@@ -329,12 +329,6 @@ try:
 except NotImplementedError as exc:
     print(exc)
 ```
-
-### `TransportPacket.from_cobs_frame(data)` and `packet.to_cobs_frame()`
-
-These are stubs for future framing support and currently raise `NotImplementedError`.
-
----
 
 ## `TransportPacketHeader`
 
@@ -692,7 +686,7 @@ print(padding_bits)
 - `payload_words` are the **transmitted** words and may include zero padding bits.
 - `payload_bytes` are the **logical** payload bytes and do not include transmitted padding bits.
 - For non-byte-aligned payloads, the final byte in `payload_bytes` uses only its least significant bits for the final partial byte.
-- `verify_checksum()` and the COBS methods are intentionally present but not implemented yet.
+- `verify_checksum()` is intentionally present but not implemented yet.
 - `from_words(...)` expects a NumPy array with `dtype=np.uint32`.
 
 ---

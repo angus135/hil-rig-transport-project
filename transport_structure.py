@@ -8,7 +8,7 @@ protocol represented as a sequence of 32-bit words. The API supports:
 - serialising packets back to words or bytes
 - slicing payload bits even when the payload is not byte aligned
 - validating header fields at construction time
-- stubs for checksum and COBS framing APIs that can be implemented later
+- stubs for checksum that can be implemented later
 
 The packet payload is stored internally as a single integer plus an explicit
 logical bit length. All other payload representations are derived from that
@@ -688,17 +688,6 @@ class TransportPacket:
 
         computed_checksum = self.compute_checksum(self.to_bytes())
         return computed_checksum == self.header.checksum
-
-    @classmethod
-    def from_cobs_frame(cls, _: bytes) -> "TransportPacket":
-        """Decode a packet from a COBS-framed transport frame."""
-
-        raise NotImplementedError("COBS framing support has not been implemented yet")
-
-    def to_cobs_frame(self) -> bytes:
-        """Encode the packet into a COBS-framed transport frame."""
-
-        raise NotImplementedError("COBS framing support has not been implemented yet")
 
     def __repr__(self) -> str:
         """Return a debug-friendly representation of the packet."""
