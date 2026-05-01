@@ -37,27 +37,27 @@ class TransportPacketState(IntEnum):
     logging, and later refactoring easier than passing raw integers everywhere.
     """
 
-    VALUE_0 = 0
-    VALUE_1 = 1
-    VALUE_2 = 2
-    VALUE_3 = 3
-    VALUE_4 = 4
-    VALUE_5 = 5
-    VALUE_6 = 6
-    VALUE_7 = 7
+    IDLE = 0
+    CONFIGURING = 1
+    ARMED = 2
+    RUNNING = 3
+    REPORTING = 4
+    FAULT = 5
+    RESERVED_6 = 6
+    RESERVED_7 = 7
 
 
 class TransportStateChangeFlag(IntEnum):
     """Generic 3-bit requested-state-change enumeration."""
 
-    VALUE_0 = 0
-    VALUE_1 = 1
-    VALUE_2 = 2
-    VALUE_3 = 3
-    VALUE_4 = 4
-    VALUE_5 = 5
-    VALUE_6 = 6
-    VALUE_7 = 7
+    IDLE = 0
+    CONFIGURING = 1
+    ARMED = 2
+    RUNNING = 3
+    REPORTING = 4
+    FAULT = 5
+    RESERVED_6 = 6
+    RESERVED_7 = 7
 
 
 class TransportPacketValidator:
@@ -170,9 +170,12 @@ class TransportPacketValidator:
         TransportPacketValidator.validate_bit_value(
             header.state_change_ack, "state_change_ack"
         )
+        TransportPacketValidator.validate_bit_value(
+            header.keep_alive_bit, "keep_alive_bit"
+        )
 
-        if not (0 <= header.reserved <= 0x7FFF):
-            raise ValueError("reserved must fit in 15 bits")
+        if not (0 <= header.reserved <= 0x3FFF):
+            raise ValueError("reserved must fit in 14 bits")
 
         if not (0 <= header.window_size <= 0xFFFF):
             raise ValueError("window_size must fit in 16 bits")
@@ -280,6 +283,7 @@ class TransportPacketHeader:
         current_state: StateValue,
         change_state_flag: StateChangeValue,
         state_change_ack: int,
+        keep_alive_bit: int,
         reserved: int,
         window_size: int,
         checksum: int,
@@ -298,7 +302,9 @@ class TransportPacketHeader:
         :param current_state: Current 3-bit state value or enum.
         :param change_state_flag: Requested 3-bit state change or enum.
         :param state_change_ack: State-change acknowledgement bit.
-        :param reserved: 15-bit reserved field.
+        :param keep_alive_bit: Keep-alive bit used by higher layers to maintain
+            the host/HIL-RIG connection.
+        :param reserved: 14-bit reserved field.
         :param window_size: 16-bit advertised window size.
         :param checksum: 16-bit checksum field.
         """
@@ -314,6 +320,7 @@ class TransportPacketHeader:
         self.current_state = int(current_state)
         self.change_state_flag = int(change_state_flag)
         self.state_change_ack = state_change_ack
+        self.keep_alive_bit = keep_alive_bit
         self.reserved = reserved
         self.window_size = window_size
         self.checksum = checksum
@@ -346,7 +353,8 @@ class TransportPacketHeader:
             current_state=TransportPacketState((word2 >> 19) & 0x7),
             change_state_flag=TransportStateChangeFlag((word2 >> 16) & 0x7),
             state_change_ack=(word2 >> 15) & 0x1,
-            reserved=word2 & 0x7FFF,
+            keep_alive_bit=(word2 >> 14) & 0x1,
+            reserved=word2 & 0x3FFF,
             window_size=(word3 >> 16) & 0xFFFF,
             checksum=word3 & 0xFFFF,
         )
@@ -369,7 +377,8 @@ class TransportPacketHeader:
             | ((self.current_state & 0x7) << 19)
             | ((self.change_state_flag & 0x7) << 16)
             | ((self.state_change_ack & 0x1) << 15)
-            | (self.reserved & 0x7FFF)
+            | ((self.keep_alive_bit & 0x1) << 14)
+            | (self.reserved & 0x3FFF)
         )
 
         word3 = np.uint32(
@@ -395,12 +404,12 @@ class TransportPacketHeader:
             f"current_state={self.current_state}, "
             f"change_state_flag={self.change_state_flag}, "
             f"state_change_ack={self.state_change_ack}, "
+            f"keep_alive_bit={self.keep_alive_bit}, "
             f"reserved=0x{self.reserved:04X}, "
             f"window_size={self.window_size}, "
             f"checksum=0x{self.checksum:04X}"
             ")"
         )
-
 
 class TransportPacket:
     """Represents a complete transport packet.
@@ -528,6 +537,7 @@ class TransportPacket:
         current_state: StateValue,
         change_state_flag: StateChangeValue,
         state_change_ack: int,
+        keep_alive_bit: int,
         reserved: int,
         window_size: int,
         checksum: int = 0,
@@ -550,7 +560,9 @@ class TransportPacket:
         :param current_state: Current state or enum.
         :param change_state_flag: Requested state change or enum.
         :param state_change_ack: State-change acknowledgement bit.
-        :param reserved: 15-bit reserved field.
+        :param keep_alive_bit: Keep-alive bit used by higher layers to maintain
+            the host/HIL-RIG connection.
+        :param reserved: 14-bit reserved field.
         :param window_size: 16-bit window size.
         :param checksum: 16-bit checksum. Left explicit for now until the
             checksum algorithm is defined.
@@ -574,6 +586,7 @@ class TransportPacket:
             current_state=current_state,
             change_state_flag=change_state_flag,
             state_change_ack=state_change_ack,
+            keep_alive_bit=keep_alive_bit,
             reserved=reserved,
             window_size=window_size,
             checksum=checksum,
@@ -713,9 +726,10 @@ if __name__ == "__main__":
         rst_bit=0,
         syn_bit=0,
         fin_bit=0,
-        current_state=TransportPacketState.VALUE_0,
-        change_state_flag=TransportStateChangeFlag.VALUE_0,
+        current_state=TransportPacketState.IDLE,
+        change_state_flag=TransportStateChangeFlag.IDLE,
         state_change_ack=1,
+        keep_alive_bit=0,
         reserved=0,
         window_size=0x0040,
         checksum=0x00FF,
@@ -725,3 +739,4 @@ if __name__ == "__main__":
     print(example_packet.payload_words)
     print(example_packet.payload_bytes)
     print(example_packet)
+

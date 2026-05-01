@@ -28,10 +28,11 @@ class TransportPacketTests(unittest.TestCase):
             rst_bit=0,
             syn_bit=1,
             fin_bit=0,
-            current_state=TransportPacketState.VALUE_2,
-            change_state_flag=TransportStateChangeFlag.VALUE_5,
+            current_state=TransportPacketState.ARMED,
+            change_state_flag=TransportStateChangeFlag.FAULT,
             state_change_ack=0,
-            reserved=0x55AA,
+            keep_alive_bit=1,
+            reserved=0x15AA,
             window_size=0x1234,
             checksum=0xBEEF,
         )
@@ -57,9 +58,10 @@ class TransportPacketTests(unittest.TestCase):
             rst_bit=0,
             syn_bit=0,
             fin_bit=0,
-            current_state=TransportPacketState.VALUE_0,
-            change_state_flag=TransportStateChangeFlag.VALUE_0,
+            current_state=TransportPacketState.IDLE,
+            change_state_flag=TransportStateChangeFlag.IDLE,
             state_change_ack=0,
+            keep_alive_bit=0,
             reserved=0,
             window_size=0,
             checksum=0,
@@ -81,9 +83,10 @@ class TransportPacketTests(unittest.TestCase):
             rst_bit=0,
             syn_bit=0,
             fin_bit=0,
-            current_state=TransportPacketState.VALUE_0,
-            change_state_flag=TransportStateChangeFlag.VALUE_0,
+            current_state=TransportPacketState.IDLE,
+            change_state_flag=TransportStateChangeFlag.IDLE,
             state_change_ack=0,
+            keep_alive_bit=0,
             reserved=0,
             window_size=0,
             checksum=0,
@@ -107,9 +110,10 @@ class TransportPacketTests(unittest.TestCase):
                 rst_bit=0,
                 syn_bit=0,
                 fin_bit=0,
-                current_state=TransportPacketState.VALUE_0,
-                change_state_flag=TransportStateChangeFlag.VALUE_0,
+                current_state=TransportPacketState.IDLE,
+                change_state_flag=TransportStateChangeFlag.IDLE,
                 state_change_ack=0,
+                keep_alive_bit=0,
                 reserved=0,
                 window_size=0,
                 checksum=0,
@@ -127,9 +131,10 @@ class TransportPacketTests(unittest.TestCase):
             rst_bit=0,
             syn_bit=0,
             fin_bit=0,
-            current_state=TransportPacketState.VALUE_0,
-            change_state_flag=TransportStateChangeFlag.VALUE_0,
+            current_state=TransportPacketState.IDLE,
+            change_state_flag=TransportStateChangeFlag.IDLE,
             state_change_ack=0,
+            keep_alive_bit=0,
             reserved=0,
             window_size=0,
             checksum=0,
@@ -155,9 +160,10 @@ class TransportPacketTests(unittest.TestCase):
             rst_bit=0,
             syn_bit=0,
             fin_bit=1,
-            current_state=TransportPacketState.VALUE_3,
-            change_state_flag=TransportStateChangeFlag.VALUE_4,
+            current_state=TransportPacketState.RUNNING,
+            change_state_flag=TransportStateChangeFlag.REPORTING,
             state_change_ack=1,
+            keep_alive_bit=1,
             reserved=0x1234,
             window_size=0x4567,
             checksum=0x89AB,
@@ -185,9 +191,10 @@ class TransportPacketTests(unittest.TestCase):
             rst_bit=0,
             syn_bit=0,
             fin_bit=0,
-            current_state=TransportPacketState.VALUE_1,
-            change_state_flag=TransportStateChangeFlag.VALUE_2,
+            current_state=TransportPacketState.CONFIGURING,
+            change_state_flag=TransportStateChangeFlag.ARMED,
             state_change_ack=1,
+            keep_alive_bit=0,
             reserved=0x1234,
             window_size=0x5678,
             checksum=0x9ABC,
@@ -199,10 +206,10 @@ class TransportPacketTests(unittest.TestCase):
         self.assertEqual(decoded.payload_bit_length, 1)
         self.assertEqual(decoded.header.padding_length_bits, 31)
 
-    def test_reserved_field_is_limited_to_fifteen_bits(self) -> None:
-        """The reserved field should reject values that need more than 15 bits."""
+    def test_reserved_field_is_limited_to_fourteen_bits(self) -> None:
+        """The reserved field should reject values that need more than 14 bits."""
 
-        with self.assertRaisesRegex(ValueError, "reserved must fit in 15 bits"):
+        with self.assertRaisesRegex(ValueError, "reserved must fit in 14 bits"):
             TransportPacketHeader(
                 sequence_number=0,
                 acknowledgement_number=0,
@@ -212,10 +219,82 @@ class TransportPacketTests(unittest.TestCase):
                 rst_bit=0,
                 syn_bit=0,
                 fin_bit=0,
-                current_state=TransportPacketState.VALUE_0,
-                change_state_flag=TransportStateChangeFlag.VALUE_0,
+                current_state=TransportPacketState.IDLE,
+                change_state_flag=TransportStateChangeFlag.IDLE,
                 state_change_ack=0,
-                reserved=0x8000,
+                keep_alive_bit=0,
+                reserved=0x4000,
+                window_size=0,
+                checksum=0,
+            )
+
+
+    def test_named_transport_states_match_brainstorm_wire_values(self) -> None:
+        """The explicit protocol states should occupy the 3-bit state field."""
+
+        self.assertEqual(int(TransportPacketState.IDLE), 0)
+        self.assertEqual(int(TransportPacketState.CONFIGURING), 1)
+        self.assertEqual(int(TransportPacketState.ARMED), 2)
+        self.assertEqual(int(TransportPacketState.RUNNING), 3)
+        self.assertEqual(int(TransportPacketState.REPORTING), 4)
+        self.assertEqual(int(TransportPacketState.FAULT), 5)
+
+        self.assertEqual(int(TransportStateChangeFlag.IDLE), 0)
+        self.assertEqual(int(TransportStateChangeFlag.CONFIGURING), 1)
+        self.assertEqual(int(TransportStateChangeFlag.ARMED), 2)
+        self.assertEqual(int(TransportStateChangeFlag.RUNNING), 3)
+        self.assertEqual(int(TransportStateChangeFlag.REPORTING), 4)
+        self.assertEqual(int(TransportStateChangeFlag.FAULT), 5)
+
+    def test_keep_alive_bit_is_packed_after_state_change_ack(self) -> None:
+        """The keep-alive bit should consume the top bit of the old reserved field."""
+
+        header = TransportPacketHeader(
+            sequence_number=0x11111111,
+            acknowledgement_number=0x22222222,
+            padding_length_bits=0,
+            source_bit=1,
+            ack_bit=1,
+            rst_bit=0,
+            syn_bit=1,
+            fin_bit=0,
+            current_state=TransportPacketState.RUNNING,
+            change_state_flag=TransportStateChangeFlag.REPORTING,
+            state_change_ack=1,
+            keep_alive_bit=1,
+            reserved=0x2AAA,
+            window_size=0x1234,
+            checksum=0xBEEF,
+        )
+
+        word2 = int(header.to_words()[2])
+
+        self.assertEqual((word2 >> 15) & 0x1, 1)
+        self.assertEqual((word2 >> 14) & 0x1, 1)
+        self.assertEqual(word2 & 0x3FFF, 0x2AAA)
+
+        decoded = TransportPacketHeader.from_words(header.to_words())
+        self.assertEqual(decoded.keep_alive_bit, 1)
+        self.assertEqual(decoded.reserved, 0x2AAA)
+
+    def test_keep_alive_bit_validation_occurs_during_construction(self) -> None:
+        """The keep-alive field is a single-bit field."""
+
+        with self.assertRaisesRegex(ValueError, "keep_alive_bit must be 0 or 1"):
+            TransportPacketHeader(
+                sequence_number=0,
+                acknowledgement_number=0,
+                padding_length_bits=0,
+                source_bit=0,
+                ack_bit=0,
+                rst_bit=0,
+                syn_bit=0,
+                fin_bit=0,
+                current_state=TransportPacketState.IDLE,
+                change_state_flag=TransportStateChangeFlag.IDLE,
+                state_change_ack=0,
+                keep_alive_bit=2,
+                reserved=0,
                 window_size=0,
                 checksum=0,
             )
@@ -233,9 +312,10 @@ class TransportPacketTests(unittest.TestCase):
             rst_bit=0,
             syn_bit=0,
             fin_bit=0,
-            current_state=TransportPacketState.VALUE_0,
-            change_state_flag=TransportStateChangeFlag.VALUE_0,
+            current_state=TransportPacketState.IDLE,
+            change_state_flag=TransportStateChangeFlag.IDLE,
             state_change_ack=0,
+            keep_alive_bit=0,
             reserved=0,
             window_size=0,
             checksum=0,
